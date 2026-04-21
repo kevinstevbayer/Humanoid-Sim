@@ -1,0 +1,264 @@
+<mujoco model="Titan_Humanoid_Competition_V2">
+
+  <!-- ═══════════════════════════════════════════════════
+       COMPILER + SOLVER
+       coordinate="local" is deprecated in MuJoCo 3.x — removed.
+       All angles in degrees for MJCF readability; ctrl targets
+       in the Python layer are always in RADIANS.
+  ════════════════════════════════════════════════════ -->
+  <compiler angle="degree" autolimits="true"/>
+
+  <option gravity="0 0 -9.81"
+          timestep="0.001"
+          iterations="50"
+          solver="Newton"
+          cone="pyramidal"
+          impratio="10"/>
+
+  <!-- ═══════════════════════════════════════════════════
+       DEFAULT CLASSES
+       Hierarchy: global → limb | torso | foot | heavy_joint
+  ════════════════════════════════════════════════════ -->
+  <default>
+    <!-- All joints: hinge, moderate structural damping, armature for realism -->
+    <joint type="hinge" damping="1.0" armature="0.02" limited="true"/>
+    <!-- All geoms: capsule, realistic human tissue density -->
+    <geom type="capsule" rgba="0.75 0.75 0.78 1" density="985" contype="1" conaffinity="1"/>
+
+    <default class="limb">
+      <geom size="0.038"/>
+    </default>
+
+    <default class="torso_geom">
+      <geom size="0.072" rgba="0.55 0.62 0.80 1"/>
+    </default>
+
+    <default class="foot_geom">
+      <!-- Feet: lower density (shoes ~0.5 kg), high friction contype -->
+      <geom size="0.032" density="600" rgba="0.25 0.25 0.28 1"
+            contype="1" conaffinity="1"
+            friction="0.9 0.005 0.0001"/>
+    </default>
+
+    <!-- Joints that carry heavy load: more damping -->
+    <default class="heavy_joint">
+      <joint damping="3.0" armature="0.06"/>
+    </default>
+
+    <!-- Self-collision group: limbs vs torso disabled -->
+    <default class="self_nc">
+      <geom contype="2" conaffinity="2"/>
+    </default>
+  </default>
+
+  <!-- ═══════════════════════════════════════════════════
+       ASSETS — materials for visual quality
+  ════════════════════════════════════════════════════ -->
+  <asset>
+    <material name="floor_mat"  rgba="0.20 0.25 0.30 1" reflectance="0.2"/>
+    <material name="table_mat"  rgba="0.42 0.28 0.18 1"/>
+    <material name="skin_mat"   rgba="0.90 0.65 0.52 1"/>
+    <material name="metal_mat"  rgba="0.50 0.55 0.62 1" reflectance="0.4"/>
+  </asset>
+
+  <!-- ═══════════════════════════════════════════════════
+       WORLD
+  ════════════════════════════════════════════════════ -->
+  <worldbody>
+    <light name="sun"     directional="true" diffuse=".8 .8 .8" specular=".2 .2 .2"
+           pos="0 0 5"   dir="0 -0.3 -1" castshadow="true"/>
+    <light name="fill"    directional="true" diffuse=".3 .3 .4"
+           pos="-3 3 4"  dir="1 -1 -1"/>
+
+    <!-- Floor: friction tuned for stable bipedal contact -->
+    <geom name="floor" type="plane" size="10 10 0.1"
+          material="floor_mat"
+          friction="0.85 0.005 0.0001"
+          contype="1" conaffinity="1"/>
+
+    <!-- Table obstacle -->
+    <body name="table" pos="1.1 0 0.42">
+      <geom name="table_top"  type="box" size="0.35 0.55 0.025" material="table_mat"
+            contype="1" conaffinity="1"/>
+      <geom name="table_leg1" type="box" size="0.022 0.022 0.22" pos=" 0.28  0.50 -0.245" material="metal_mat"/>
+      <geom name="table_leg2" type="box" size="0.022 0.022 0.22" pos="-0.28  0.50 -0.245" material="metal_mat"/>
+      <geom name="table_leg3" type="box" size="0.022 0.022 0.22" pos=" 0.28 -0.50 -0.245" material="metal_mat"/>
+      <geom name="table_leg4" type="box" size="0.022 0.022 0.22" pos="-0.28 -0.50 -0.245" material="metal_mat"/>
+    </body>
+
+    <!-- ─────────────────────────────────────────
+         ROBOT ROOT
+         freejoint enables full 6-DOF dynamics.
+         Initial pos at z=1.02 (feet ~just above floor).
+    ───────────────────────────────────────── -->
+    <body name="pelvis" pos="0 0 1.02">
+      <freejoint name="root"/>
+
+      <!-- Pelvis CoM site for ZMP computation -->
+      <site name="pelvis_com" pos="0 0 0.05" size="0.01"/>
+      <geom name="pelvis_geom" class="torso_geom" fromto="0 -0.09 0 0 0.09 0" rgba="0.55 0.62 0.80 1"/>
+
+      <!-- ── TORSO ───────────────────────── -->
+      <body name="torso" pos="0 0 0.18">
+        <joint name="torso_pitch" axis="0 1 0" range="-20 20" damping="4.0" armature="0.08"/>
+        <geom name="torso_geom" class="torso_geom" fromto="0 0 0 0 0 0.28" size="0.075"/>
+
+        <!-- ── HEAD ─────────────────────── -->
+        <body name="head" pos="0 0 0.35">
+          <joint name="head_pitch" axis="0 1 0" range="-30 30" damping="0.5" armature="0.005"/>
+          <geom name="head_geom" type="sphere" size="0.095" material="skin_mat"
+                contype="4" conaffinity="4"/>
+          <site name="head_imu" pos="0 0 0" size="0.01"/>
+        </body>
+
+        <!-- ── RIGHT ARM ─────────────────── -->
+        <body name="r_upper_arm" pos="0 -0.17 0.22">
+          <joint name="r_shoulder_pitch" axis="0 1 0" range="-170 60"  damping="1.5" armature="0.03"/>
+          <joint name="r_shoulder_roll"  axis="1 0 0" range="-90  60"  damping="1.2" armature="0.025"/>
+          <geom class="limb" fromto="0 0 0 0 0 -0.28"/>
+          <body name="r_forearm" pos="0 0 -0.28">
+            <joint name="r_elbow" axis="0 1 0" range="-135 5" damping="0.8" armature="0.015"/>
+            <geom class="limb" fromto="0 0 0 0 0 -0.25" size="0.033"/>
+            <body name="r_hand" pos="0 0 -0.25">
+              <joint name="r_wrist_pitch" axis="0 1 0" range="-60 60" damping="0.3" armature="0.005"/>
+              <geom type="sphere" size="0.038" material="skin_mat" contype="4" conaffinity="4"/>
+              <site name="r_wrist_site" pos="0 0 0" size="0.008"/>
+            </body>
+          </body>
+        </body>
+
+        <!-- ── LEFT ARM ──────────────────── -->
+        <body name="l_upper_arm" pos="0 0.17 0.22">
+          <joint name="l_shoulder_pitch" axis="0 1 0" range="-170 60"  damping="1.5" armature="0.03"/>
+          <joint name="l_shoulder_roll"  axis="1 0 0" range="-60  90"  damping="1.2" armature="0.025"/>
+          <geom class="limb" fromto="0 0 0 0 0 -0.28"/>
+          <body name="l_forearm" pos="0 0 -0.28">
+            <joint name="l_elbow" axis="0 1 0" range="-135 5" damping="0.8" armature="0.015"/>
+            <geom class="limb" fromto="0 0 0 0 0 -0.25" size="0.033"/>
+            <body name="l_hand" pos="0 0 -0.25">
+              <joint name="l_wrist_pitch" axis="0 1 0" range="-60 60" damping="0.3" armature="0.005"/>
+              <geom type="sphere" size="0.038" material="skin_mat" contype="4" conaffinity="4"/>
+              <site name="l_wrist_site" pos="0 0 0" size="0.008"/>
+            </body>
+          </body>
+        </body>
+
+      </body> <!-- /torso -->
+
+      <!-- ── RIGHT LEG ──────────────────────────────── -->
+      <body name="r_thigh" pos="0 -0.10 -0.04">
+        <joint name="r_hip_pitch" class="heavy_joint" axis="0 1 0" range="-60 90"/>
+        <joint name="r_hip_roll"  class="heavy_joint" axis="1 0 0" range="-30 30"/>
+        <geom class="limb" fromto="0 0 0 0 0 -0.42"/>
+
+        <body name="r_shin" pos="0 0 -0.42">
+          <joint name="r_knee" class="heavy_joint" axis="0 1 0" range="-5 135"/>
+          <geom class="limb" fromto="0 0 0 0 0 -0.38"/>
+
+          <body name="r_foot" pos="0 0 -0.38">
+            <joint name="r_ankle_pitch" axis="0 1 0" range="-40 30" damping="1.5" armature="0.03"/>
+            <joint name="r_ankle_roll"  axis="1 0 0" range="-20 20" damping="0.8" armature="0.015"/>
+            <!-- Heel capsule -->
+            <geom name="r_heel" class="foot_geom" fromto="-0.03 0 -0.04  0.05 0 -0.04"/>
+            <!-- Toe capsule -->
+            <geom name="r_toe"  class="foot_geom" fromto=" 0.05 0 -0.04  0.14 0 -0.04"/>
+            <!-- Sole contact site for force sensing -->
+            <site name="r_sole" pos="0.055 0 -0.07" size="0.008"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- ── LEFT LEG ───────────────────────────────── -->
+      <body name="l_thigh" pos="0 0.10 -0.04">
+        <joint name="l_hip_pitch" class="heavy_joint" axis="0 1 0" range="-60 90"/>
+        <joint name="l_hip_roll"  class="heavy_joint" axis="1 0 0" range="-30 30"/>
+        <geom class="limb" fromto="0 0 0 0 0 -0.42"/>
+
+        <body name="l_shin" pos="0 0 -0.42">
+          <joint name="l_knee" class="heavy_joint" axis="0 1 0" range="-5 135"/>
+          <geom class="limb" fromto="0 0 0 0 0 -0.38"/>
+
+          <body name="l_foot" pos="0 0 -0.38">
+            <joint name="l_ankle_pitch" axis="0 1 0" range="-40 30" damping="1.5" armature="0.03"/>
+            <joint name="l_ankle_roll"  axis="1 0 0" range="-20 20" damping="0.8" armature="0.015"/>
+            <geom name="l_heel" class="foot_geom" fromto="-0.03 0 -0.04  0.05 0 -0.04"/>
+            <geom name="l_toe"  class="foot_geom" fromto=" 0.05 0 -0.04  0.14 0 -0.04"/>
+            <site name="l_sole" pos="0.055 0 -0.07" size="0.008"/>
+          </body>
+        </body>
+      </body>
+
+    </body> <!-- /pelvis -->
+  </worldbody>
+
+  <!-- ═══════════════════════════════════════════════════
+       ACTUATORS
+       All position controllers with:
+       - kp: proportional gain (N·m / rad)
+       - kv: derivative / velocity damping
+       - forcerange: realistic motor torque limits (N·m)
+       - ctrlrange: always in RADIANS
+  ════════════════════════════════════════════════════ -->
+  <actuator>
+    <!-- ── LEGS (primary locomotion DOF) ── -->
+    <position name="r_hip_pitch_mot"  joint="r_hip_pitch"  kp="350" kv="18" forcerange="-220 220" ctrlrange="-1.047 1.571"/>
+    <position name="r_hip_roll_mot"   joint="r_hip_roll"   kp="200" kv="12" forcerange="-120 120" ctrlrange="-0.524 0.524"/>
+    <position name="r_knee_mot"       joint="r_knee"       kp="400" kv="22" forcerange="-250 250" ctrlrange="-0.087 2.356"/>
+    <position name="r_ankle_pitch_mot" joint="r_ankle_pitch" kp="150" kv="8"  forcerange="-100 100" ctrlrange="-0.698 0.524"/>
+    <position name="r_ankle_roll_mot"  joint="r_ankle_roll"  kp="80"  kv="4"  forcerange="-60  60"  ctrlrange="-0.349 0.349"/>
+
+    <position name="l_hip_pitch_mot"  joint="l_hip_pitch"  kp="350" kv="18" forcerange="-220 220" ctrlrange="-1.047 1.571"/>
+    <position name="l_hip_roll_mot"   joint="l_hip_roll"   kp="200" kv="12" forcerange="-120 120" ctrlrange="-0.524 0.524"/>
+    <position name="l_knee_mot"       joint="l_knee"       kp="400" kv="22" forcerange="-250 250" ctrlrange="-0.087 2.356"/>
+    <position name="l_ankle_pitch_mot" joint="l_ankle_pitch" kp="150" kv="8"  forcerange="-100 100" ctrlrange="-0.698 0.524"/>
+    <position name="l_ankle_roll_mot"  joint="l_ankle_roll"  kp="80"  kv="4"  forcerange="-60  60"  ctrlrange="-0.349 0.349"/>
+
+    <!-- ── TORSO ── -->
+    <position name="torso_pitch_mot"  joint="torso_pitch"  kp="300" kv="20" forcerange="-180 180" ctrlrange="-0.349 0.349"/>
+
+    <!-- ── ARMS (counter-swing, reduced torque) ── -->
+    <position name="r_shoulder_p_mot" joint="r_shoulder_pitch" kp="120" kv="8"  forcerange="-80 80"  ctrlrange="-2.967 1.047"/>
+    <position name="r_shoulder_r_mot" joint="r_shoulder_roll"  kp="100" kv="6"  forcerange="-60 60"  ctrlrange="-1.571 1.047"/>
+    <position name="r_elbow_mot"      joint="r_elbow"          kp="80"  kv="5"  forcerange="-60 60"  ctrlrange="-2.356 0.087"/>
+    <position name="r_wrist_mot"      joint="r_wrist_pitch"    kp="40"  kv="2"  forcerange="-25 25"  ctrlrange="-1.047 1.047"/>
+
+    <position name="l_shoulder_p_mot" joint="l_shoulder_pitch" kp="120" kv="8"  forcerange="-80 80"  ctrlrange="-2.967 1.047"/>
+    <position name="l_shoulder_r_mot" joint="l_shoulder_roll"  kp="100" kv="6"  forcerange="-60 60"  ctrlrange="-1.047 1.571"/>
+    <position name="l_elbow_mot"      joint="l_elbow"          kp="80"  kv="5"  forcerange="-60 60"  ctrlrange="-2.356 0.087"/>
+    <position name="l_wrist_mot"      joint="l_wrist_pitch"    kp="40"  kv="2"  forcerange="-25 25"  ctrlrange="-1.047 1.047"/>
+  </actuator>
+
+  <!-- ═══════════════════════════════════════════════════
+       SENSORS
+  ════════════════════════════════════════════════════ -->
+  <sensor>
+    <!-- IMU on pelvis -->
+    <accelerometer name="pelvis_accel"  site="pelvis_com"/>
+    <gyro          name="pelvis_gyro"   site="pelvis_com"/>
+    <framequat     name="pelvis_quat"   objtype="site" objname="pelvis_com"/>
+
+    <!-- IMU on head -->
+    <accelerometer name="head_accel"    site="head_imu"/>
+
+    <!-- Foot ground reaction forces -->
+    <force  name="r_sole_force"  site="r_sole"/>
+    <torque name="r_sole_torque" site="r_sole"/>
+    <force  name="l_sole_force"  site="l_sole"/>
+    <torque name="l_sole_torque" site="l_sole"/>
+
+    <!-- Joint position sensors (subset for state estimation) -->
+    <jointpos name="r_hip_pitch_pos" joint="r_hip_pitch"/>
+    <jointpos name="r_knee_pos"      joint="r_knee"/>
+    <jointpos name="r_ankle_pitch_pos" joint="r_ankle_pitch"/>
+    <jointpos name="l_hip_pitch_pos" joint="l_hip_pitch"/>
+    <jointpos name="l_knee_pos"      joint="l_knee"/>
+    <jointpos name="l_ankle_pitch_pos" joint="l_ankle_pitch"/>
+
+    <!-- Velocities -->
+    <jointvel name="r_hip_pitch_vel" joint="r_hip_pitch"/>
+    <jointvel name="r_knee_vel"      joint="r_knee"/>
+    <jointvel name="l_hip_pitch_vel" joint="l_hip_pitch"/>
+    <jointvel name="l_knee_vel"      joint="l_knee"/>
+  </sensor>
+
+</mujoco>
