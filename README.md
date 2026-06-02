@@ -1,6 +1,7 @@
 # Titan Humanoid Simulation (V3)
 
 This repository contains the simulation environment and control logic for the Titan Humanoid robot, developed for competition-level bimanual manipulation and locomotion tasks. The simulation is built using [MuJoCo](https://mujoco.org/) and integrates with [ROS2](https://docs.ros.org/en/humble/index.html) for scalable robotic control.
+[![Titan Simulation Demo](docs/media/thumbnail.png)](https://youtu.be/7tqXmx2JkS0)
 
 ## Key Features
 * **Bimanual Manipulation:** Coordinated control of dual robotic arms for complex pick-and-place and handover tasks.
